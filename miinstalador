@@ -1,0 +1,174 @@
+#!/bin/bash
+
+LOG="install-$(date +%d-%H%M%S).log"
+
+echo ""
+echo "         #####################################################"
+echo "         #                     BIENVENIDO!                   #"
+echo "         #####################################################"
+echo ""
+printf "\n"
+
+# Continuar
+read -n1 -rep "Te gustaria iniciar la instalacion? (s/n) " instalar
+if [[ $instalar =~ ^[Ss]$ ]]; then
+    printf "\n%s  Bien, iniciando la instalacion!.\n"
+else
+    printf "\n%s  No se realizo la instalacion. Hasta luego!!!\n"
+    exit
+fi
+
+#Limpiar pantalla.
+clear
+
+idioma=$(curl https://ipapi.co/languages | awk -F "," '{print $1}' | sed 's/-/_/g' | sed "s|$|.UTF8|")
+clear
+echo ""
+echo "$idioma UTF-8" > /etc/locale.gen
+locale-gen
+echo "LANG=$idioma" > /etc/locale.conf
+exportlang=$(echo "LANG=$idioma")
+export $exportlang
+export LANG=$idioma
+export $(cat /etc/locale.conf)
+locale-gen
+echo ""
+clear
+
+# Instalando el sistema base.
+echo ""
+echo "Instalando el sistema base...\n"
+read -n1 -rep "Te gustaria instalar los paquetes? (s/n)" pqts
+if [[ $pqts =~ ^[Ss]$ ]]; then
+    pacstrap /mtn base base-devel linux-zen linux-firmware intel-ucode nano   
+else
+    printf "El sistema base no sera instalado.\n"
+fi
+
+# Creando archivo fstab.
+echo "Creando archivo fstab..."
+sleep 3
+genfstab -U /mnt >> /mnt/etc/fstab
+cat /mnt/etc/fstab
+sleep 3
+
+#Habilitando servicio necesario para discos SSD.
+echo "Habilitando servicio necesario para discos SSD..."
+sleep 3
+arch-chroot /mnt /bin/bash -c "systemctl enable fstrim.timer"
+
+# Zona horaria Automatica
+arch-chroot /mnt /bin/bash -c "pacman -Sy curl --noconfirm"
+curl https://ipapi.co/timezone > zonahoraria
+zonahoraria=$(cat zonahoraria)
+arch-chroot /mnt /bin/bash -c "ln -sf /usr/share/zoneinfo/$zonahoraria /etc/localtime"
+arch-chroot /mnt /bin/bash -c "timedatectl set-timezone $zonahoraria"
+arch-chroot /mnt /bin/bash -c "pacman -S ntp --noconfirm"
+arch-chroot /mnt /bin/bash -c "ntpd -qg"
+arch-chroot /mnt /bin/bash -c "hwclock --systohc"
+sleep 3
+rm zonahoraria
+clear
+
+# Idioma del sistema
+printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' _
+echo -e ""
+echo -e "\t\t\t| Idioma del Sistema |"
+echo -e ""
+echo "$idioma UTF-8" > /mnt/etc/locale.gen
+arch-chroot /mnt /bin/bash -c "locale-gen" 
+echo "LANG=$idioma" > /mnt/etc/locale.conf
+echo ""
+cat /mnt/etc/locale.conf 
+echo ""
+cat /mnt/etc/locale.gen
+sleep 4
+echo ""
+arch-chroot /mnt /bin/bash -c "export $(cat /mnt/etc/locale.conf)" 
+export $(cat /mnt/etc/locale.conf)
+arch-chroot /mnt /bin/bash -c "sudo -u $user export $(cat /etc/locale.conf)"
+export $(cat /etc/locale.conf)
+export $(cat /mnt/etc/locale.conf)
+exportlang=$(echo "LANG=$idioma")
+export $exportlang
+export LANG=$idioma
+locale-gen
+arch-chroot /mnt /bin/bash -c "locale-gen" 
+clear
+sleep 3
+
+# Establecer un mapa de teclado para la terminal virtual
+curl https://ipapi.co/languages | awk -F "," '{print $1}' | sed -e's/.$//' | sed -e's/.$//' | sed -e's/.$//' > keymap
+keymap=$(cat keymap)
+echo "KEYMAP=$keymap" > /mnt/etc/vconsole.conf 
+cat /mnt/etc/vconsole.conf 
+clear
+
+#Agregando el hostname
+read -p "Cual seria el hostname?" hostname
+echo "$hostname" > /mnt/etc/hostname
+#echo "archlinux" >> /etc/hostname
+
+echo "Configurando el localdomain..."
+echo "127.0.0.1   localhost\n::1   localhost\n127.0.1.1   $hostname.localdomain   $hostname" > /mnt/etc/hosts
+cat /mnt/etc/hosts
+sleep 4
+#Configurar el password para root.
+#read -p "Introduce la clave de Root/Administrador: " rootpasswd
+echo "Configurando el password para root..."
+arch-chroot /mnt /bin/bash -c "passwd"
+
+
+read -n1 -rep "Te gustaria instalar paquetes necesarios para los dispositivos? (s/n)" maspaquetes
+if [[ $maspaquetes =~ ^[Ss]$ ]]; then
+    for paquete in efibootmgr networkmanager wireless_tools wpa_supplicant dialog os-prober mtools dosfstools linux-zen-headers ntfs-3g xdg-user-dirs bluez bluez-utils openssh htop wget iwd smartmontools xdg-utils; do
+        arch-chroot /mnt /bin/bash -c "pacman -S $paquete" 2>&1 | tee -a $LOG"
+        if [ $? -ne 0 ]; then
+            echo -e "$paquete instalacion ha fallado, por favor revisa el archivo: install.log"
+            exit 1
+    	fi
+    done	
+else
+  printf "Los paquetes no seran instalados.\n"
+fi
+
+read -n1 -rep "Te gustaria instalar el controlador de audio pipewire? (s/n)" audio
+if [[ $audio =~ ^[Ss]$ ]]; then
+    for controler in pipewire pipewire-alsa pipewire-jack pipewire-pulse gst-plugin-pipewire libpulse wireplumber; do
+        arch-chroot /mnt /bin/bash -c "pacman -S $controler" 2>&1 | tee -a $LOG"
+        if [ $? -ne 0 ]; then
+            echo -e "$controler instalacion ha fallado, por favor revisa el archivo: install.log"
+            exit 1
+    	fi
+    done	
+else
+  printf "Pipewire no sera instalado.\n"
+fi
+
+arch-chroot /mnt /bin/bash -c "systemctl enable NetworkManager"
+
+arch-chroot /mnt /bin/bash -c "systemctl enable bluetooth"
+
+arch-chroot /mnt /bin/bash -c "systemctl enable archlinux-keyring-wkd-sync.timer"
+
+read -p "Ingrese el nombre de usuario nuevo:" usuario
+#read -p "Ingrese la contraseña para $usuario: "
+arch-chroot /mnt /bin/bash -c "useradd -mG wheel $usuario"
+
+arch-chroot /mnt /bin/bash -c "passwd $usuario"
+
+#Permisos de super usuario al grupo wheel.
+sed -i 's/#%wheel/%wheel/' /mnt/etc/sudoers
+
+#Habilitando repositorio multilib.
+sed -i 's/#[multilib]/[multilib]/g' /mnt/etc/pacman.conf
+sed -i "s/#Include = /etc/pacman.d/mirrorlist/Include = /etc/pacman.d/mirrorlist/g" /mnt/etc/pacman.conf
+
+read -n1 -rep "Te gustaria reiniciar el sistema? (s/n)" rboot
+if [[ $rboot =~ ^[Ss]$ ]]; then
+    umount -R /mnt
+    reboot
+else
+    echo "Saliendo del script..."
+    exit
+fi
