@@ -10,17 +10,6 @@ echo "         #####################################################"
 echo ""
 printf "\n"
 
-iwctl
-echo "Interfaces inalambricas disponibles:"
-station list
-read -p "Escriba el nombre de su interfaz inalambrica:" interfaz
-station $interfaz get-networks
-read -p "Introduzca el nombre de su señal inalambrica(WiFi): " wifi
-station $interfaz connect $wifi
-ping -c 3 archlinux.org
-sleep 3
-clear
-
 # Creando el sistema de archivos.
 echo "Por favor introduzca la ruta de la particion EFI: (Ejemplo: /dev/sda1 o /dev/nvme0n1p1)"
 read EFI
