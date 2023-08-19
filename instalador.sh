@@ -108,7 +108,7 @@ clear
 
 read -n1 -rep "Te gustaria instalar el controlador de audio pipewire? (s/n)" audio
 if [[ $audio =~ ^[Ss]$ ]]; then
-    for controler in pipewire pipewire-alsa pipewire-jack pipewire-pulse gst-plugin-pipewire libpulse wireplumber; do
+    for controler in pipewire pipewire-alsa pipewire-jack pipewire-pulse gst-plugin-pipewire libpulse; do
         arch-chroot /mnt /bin/bash -c "pacman -S --noconfirm $controler"
         if [ $? -ne 0 ]; then
             echo -e "$controler instalacion ha fallado, por favor revisa el archivo: install.log"
@@ -134,7 +134,7 @@ arch-chroot /mnt /bin/bash -c "systemctl enable NetworkManager"
 
 #Creacion de Usuario.
 read -p "Ingrese el nombre de usuario nuevo:" usuario
-arch-chroot /mnt /bin/bash -c "useradd -mG wheel,storage,audio $usuario"
+arch-chroot /mnt /bin/bash -c "useradd -mG wheel $usuario"
 sleep 4
 clear
 echo "Escriba su contraseña nueva..."
